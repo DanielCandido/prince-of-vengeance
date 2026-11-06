@@ -22,7 +22,7 @@ class WorkerSmokeTest(unittest.TestCase):
             (root / "scripts" / "real.gd").write_text("extends Node2D", encoding="utf-8")
             (root / "tests" / "movement_test.gd").write_text("extends Node", encoding="utf-8")
             with patch.object(worker, "ROOT", root), patch.object(
-                worker, "command", return_value={"stdout": "AGENTS.md\\nscripts/real.gd\\ntests/movement_test.gd\\n"}
+                worker, "command", return_value={"stdout": "AGENTS.md\nscripts/real.gd\ntests/movement_test.gd\n"}
             ):
                 context = worker.repository_context()
             self.assertIn("scripts/real.gd", context)
