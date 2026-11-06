@@ -9,22 +9,23 @@ Instale Python 3.11+, Git, GitHub CLI, Godot 4, Codex CLI e Gemini CLI; autentiq
 ```powershell
 $env:GEMINI_API_KEY="SUA_CHAVE"
 $env:GEMINI_MODEL="gemini-2.5-flash"
-git switch main
+git fetch origin
+git switch feat/windows-agent-automation-phase1
 git pull
-python automation/worker.py --issue 12
+python automation/worker.py --issue 2
 ```
 
-Substitua 12 por uma issue real. O primeiro comando gera uma especificação em `.automation-runs/`. **Revise-a antes de executar**:
+Substitua o número por uma issue real. O planejamento aceita alterações locais e qualquer branch; usa `git ls-files` para inventariar arquivos versionados e lê trechos limitados de scripts, cenas e testes. O arquivo `.automation-runs/issue-N-.../context.md` registra o contexto realmente enviado ao Gemini; compare com `spec.md` e observe truncamentos. **Revise o plano antes de executar**:
 
 ```powershell
-python automation/worker.py --issue 12 --execute
+python automation/worker.py --issue NUMERO --execute --approved-spec "CAMINHO_PARA_SPEC.md"
 ```
 
-A execução cria uma branch local, roda Codex, testes Godot e Gemini QA. O worker imprime instruções de publicação manual caso o QA passe. O modo `--execute` **gera novamente o plano**, portanto confira a especificação desta execução antes de confiar na aprovação anterior. Não use em tarefas críticas sem corrigir esse fluxo de aprovação.
+A execução cria uma branch local, roda Codex, testes Godot e Gemini QA. O worker imprime instruções de publicação manual caso o QA passe. O modo `--execute` exige uma especificação previamente aprovada, uma árvore Git limpa e uma branch nomeada. Use uma issue de implementação, não a issue #2 de auditoria. Não executa alterações durante o planejamento.
 
 ## Shep
 
-A integração com Shep é um ponto de extensão, não uma integração nativa comprovada. Passe `--shep-command CAMINHO_DO_WRAPPER` apenas depois de verificar a CLI instalada e criar um wrapper executável que aceite o caminho da especificação e aguarde o término. Não execute Shep e Codex simultaneamente no mesmo checkout.
+A integração com Shep é um ponto de extensão, não uma integração nativa comprovada. O wrapper incluído é somente um exemplo desativado. A versão atual do worker ainda não aceita `--shep-command`; integrar Shep exige uma implementação posterior. Não execute Shep e Codex simultaneamente no mesmo checkout.
 
 ## Segurança e limites
 
