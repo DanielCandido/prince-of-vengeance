@@ -13,10 +13,22 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / ".automation-runs"
 
 def command(argv, timeout=900, check=True):
-    result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True,
-                            encoding="utf-8", errors="replace", timeout=timeout, shell=False)
-    output = {"code": result.returncode, "stdout": result.stdout[-30000:],
-              "stderr": result.stderr[-10000:]}
+    try:
+        result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True,
+                                encoding="utf-8", errors="replace", timeout=timeout, shell=False)
+        output = {"code": result.returncode, "stdout": result.stdout[-30000:],
+                  "stderr": result.stderr[-10000:]}
+    except subprocess.TimeoutExpired as error:
+        def decode(value):
+            if isinstance(value, bytes):
+                return value.decode("utf-8", errors="replace")
+            return value or ""
+        output = {"code": 124, "stdout": decode(error.stdout)[-30000:],
+                  "stderr": decode(error.stderr)[-10000:] +
+                  f"\\nTIMEOUT: command exceeded {timeout}s"}
+        if check:
+            raise RuntimeError(f"{argv[0]} timed out after {timeout}s") from error
+        return output
     if check and result.returncode:
         raise RuntimeError(f"{argv[0]} failed ({result.returncode}): {result.stderr[-2000:]}")
     return output
@@ -174,6 +186,12 @@ def main():
                  "res://"+scene.relative_to(ROOT).as_posix()],timeout=90,check=False)})
     (folder/"godot.json").write_text(json.dumps(evidence,indent=2),encoding="utf-8")
     diff = command(["git","diff","--no-ext-diff"])["stdout"]
+    # Untracked deliverables are absent from git diff until staged.
+    untracked = command(["git","ls-files","--others","--exclude-standard"])["stdout"].splitlines()
+    for name in untracked:
+        if name.endswith(".md") and (ROOT / name).is_file():
+            diff += f"\\n--- UNTRACKED FILE: {name} ---\\n"
+            diff += (ROOT / name).read_text(encoding="utf-8")[:40000] + "\\n"
     status = command(["git","status","--porcelain"])["stdout"]
     qa_prompt = ("Independent QA for Godot 2D. Return verdict exactly 'VERDICT: PASS' "
                  "or 'VERDICT: FAIL' on its own line, followed by findings. "
