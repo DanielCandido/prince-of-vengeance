@@ -55,10 +55,14 @@ def main():
                         help="Previously reviewed spec; required for --execute")
     parser.add_argument("--skip-godot", action="store_true")
     args = parser.parse_args()
-    if command(["git","status","--porcelain"])["stdout"].strip():
-        raise RuntimeError("Start with a clean working tree.")
-    if command(["git","branch","--show-current"])["stdout"].strip() != "main":
-        raise RuntimeError("Start from main.")
+    # Planning is read-only: allow existing local edits and any current branch.
+    # Execution changes files, so keep strict guards before launching Codex.
+    if args.execute:
+        if command(["git","status","--porcelain"])["stdout"].strip():
+            raise RuntimeError("Execution requires a clean working tree.")
+        current_branch = command(["git","branch","--show-current"])["stdout"].strip()
+        if not current_branch:
+            raise RuntimeError("Execution requires a named branch (not detached HEAD).")
     issue = json.loads(command(["gh","issue","view",str(args.issue),
                                  "--json","title,body,url"])["stdout"])
     RUNS.mkdir(exist_ok=True)
