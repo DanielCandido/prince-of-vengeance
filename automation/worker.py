@@ -161,7 +161,9 @@ def main():
     prompt = ("Implement the approved spec in the existing Godot 2D project. "
               "Follow AGENTS.md; do not introduce 3D or delete assets. "
               "Do not commit or push.\n"+spec)
-    command(["codex","exec","--full-auto",prompt],timeout=3600)
+    # codex exec is non-interactive; --full-auto is not accepted by all CLI versions.
+    # Limit edits to the workspace instead of granting unrestricted filesystem access.
+    command(["codex", "exec", "--sandbox", "workspace-write", prompt], timeout=3600)
     evidence = []
     if not args.skip_godot:
         evidence.append({"name":"import",**command(
