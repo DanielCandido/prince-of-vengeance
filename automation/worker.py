@@ -21,37 +21,51 @@ def command(argv, timeout=900, check=True):
         raise RuntimeError(f"{argv[0]} failed ({result.returncode}): {result.stderr[-2000:]}")
     return output
 
-def repository_context():
-    """Ground planning in tracked project files, with explicit truncation limits."""
+def repository_context(issue_text=""):
+    """Build an issue-aware, bounded context from actual tracked files."""
     tracked = command(["git", "ls-files", "--cached"])["stdout"].splitlines()
     allowed = (".gd", ".tscn", ".tres", ".godot", ".md", ".txt")
     excluded = (".automation-runs/", "automation/", "assets/", "addons/")
     paths = sorted(p for p in tracked if p and not p.startswith(excluded))
     relevant = [p for p in paths if p.endswith(allowed)]
     inventory = "\n".join(relevant)
-    if len(inventory) > 18000:
-        inventory = inventory[:18000] + "\n[INVENTORY TRUNCATED]"
+    if len(inventory) > 14000:
+        inventory = inventory[:14000] + "\n[INVENTORY TRUNCATED]"
     sections = ["TRACKED FILE INVENTORY (paths only; not proof of behavior):\n" + inventory]
-    budget = 42000
-    priority = ("AGENTS.md", "docs/GDD.md", "DEVELOPMENT_PLAN.md",
-                "project.godot", "scenes/vertical_slice.tscn")
-    ordered = list(dict.fromkeys(
-        [p for p in priority if p in relevant] +
-        [p for p in relevant if p.startswith(("scripts/", "tests/", "scenes/", "planning/", "docs/"))]
-    ))
+    # Explicit paths mentioned in the issue are inspected first.
+    requested = [p for p in relevant if p in issue_text]
+    baseline = ["AGENTS.md", "docs/GDD.md", "project.godot",
+                "planning/M01_BACKLOG.md", "DEVELOPMENT_PLAN.md"]
+    gameplay = ["scripts/player/kaelen_controller_2d.gd",
+                "scripts/components/hitbox_2d.gd",
+                "scripts/components/hurtbox_2d.gd",
+                "scripts/components/health_component.gd"]
+    tests = [p for p in relevant if p.startswith("tests/") and p.endswith(".gd")]
+    other_scripts = [p for p in relevant if p.startswith("scripts/") and p.endswith(".gd")]
+    scenes = [p for p in relevant if p.startswith("scenes/") and p.endswith(".tscn")]
+    ordered = list(dict.fromkeys(requested + baseline[:3] + gameplay + tests +
+                                 baseline[3:] + other_scripts + scenes))
+    budget = 48000
     for name in ordered:
-        if budget <= 0:
-            break
-        file = ROOT / name
+        if name not in relevant or budget <= 0:
+            continue
         try:
-            body = file.read_text(encoding="utf-8")
+            body = (ROOT / name).read_text(encoding="utf-8")
         except (OSError, UnicodeError):
             continue
-        if len(body) > 6500:
-            body = body[:6500] + "\n[FILE TRUNCATED]"
+        # Keep documentation from crowding out executable gameplay and tests.
+        limit = 2000 if name.endswith(".md") and name != "AGENTS.md" else 5000
+        if name == "AGENTS.md":
+            limit = 3800
+        if name == "project.godot":
+            limit = 5500
+        if name in requested:
+            limit = 8500
+        if len(body) > limit:
+            body = body[:limit] + "\n[FILE TRUNCATED]"
         section = f"\n--- FILE: {name} ---\n{body}\n"
         if len(section) > budget:
-            sections.append(f"\n[CONTEXT BUDGET REACHED; remaining files not inspected]")
+            sections.append("\n[CONTEXT BUDGET REACHED; remaining files not inspected]")
             break
         sections.append(section)
         budget -= len(section)
@@ -62,11 +76,17 @@ def planner(issue, context):
     if not key:
         raise RuntimeError("Set GEMINI_API_KEY in PowerShell.")
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    prompt = ("Act as Planner for Prince of Vengeance, a Godot 2D-only game. "
-              "Respect AGENTS.md, audit existing systems, and return a Markdown specification "
-              "with acceptance criteria, affected files, tests, risks and dependencies. "
-              "Do not request 3D work.\nCONTEXT:\n" + context[:18000] +
-              "\nISSUE:\n" + issue[:10000])
+    prompt = ("You are Planner for Prince of Vengeance, strictly Godot 2D. "
+              "Treat AGENTS.md and docs/GDD.md as authoritative over outdated 3D plans. "
+              "Use only the supplied file excerpts as evidence; distinguish VERIFIED, "
+              "INFERRED and NOT INSPECTED. Cite exact paths and symbols. "
+              "Never claim tests executed, never invent paths or GUT installation. "
+              "Prefer the existing Godot test scenes. Give minimal, measurable tasks, "
+              "acceptance criteria, risks and dependencies. "
+              "For documentation-only issues, do not propose gameplay edits. "
+              "Explicitly report any truncated files and missing evidence.\n"
+              "ISSUE:\n" + issue[:10000] +
+              "\nREPOSITORY CONTEXT:\n" + context[:65000])
     request = urllib.request.Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         data=json.dumps({"contents":[{"parts":[{"text":prompt}]}]}).encode(),
@@ -128,7 +148,7 @@ def main():
             raise RuntimeError("--execute requires --approved-spec PATH to a reviewed plan.")
         spec = args.approved_spec.read_text(encoding="utf-8")
     else:
-        context = repository_context()
+        context = repository_context(issue['title'] + '\n' + (issue.get('body') or ''))
         (folder/"context.md").write_text(context, encoding="utf-8")
         spec = planner(issue["title"]+"\n"+(issue.get("body") or ""), context)
         path = folder/"spec.md"
