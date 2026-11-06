@@ -35,11 +35,30 @@ def planner(issue, context):
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         data=json.dumps({"contents":[{"parts":[{"text":prompt}]}]}).encode(),
         headers={"x-goog-api-key":key,"content-type":"application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            data = json.load(response)
-    except urllib.error.HTTPError as error:
-        raise RuntimeError(f"Gemini API HTTP {error.code}; check key, quota and model") from error
+    # Transient model overloads should not abort the entire planning run.
+    retryable = {429, 500, 502, 503, 504}
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                data = json.load(response)
+            break
+        except urllib.error.HTTPError as error:
+            details = error.read().decode("utf-8", errors="replace")[:1500]
+            if error.code not in retryable or attempt == 3:
+                raise RuntimeError(
+                    f"Gemini API HTTP {error.code}: {details}"
+                ) from error
+            delay = min(2 ** (attempt + 1), 16)
+            print(f"Gemini API HTTP {error.code}; retrying in {delay}s "
+                  f"(attempt {attempt + 2}/4)")
+            time.sleep(delay)
+        except (urllib.error.URLError, TimeoutError) as error:
+            if attempt == 3:
+                raise RuntimeError(f"Gemini API unavailable after 4 attempts: {error}") from error
+            delay = min(2 ** (attempt + 1), 16)
+            print(f"Gemini network error; retrying in {delay}s "
+                  f"(attempt {attempt + 2}/4)")
+            time.sleep(delay)
     parts = [p.get("text","") for c in data.get("candidates",[])
              for p in c.get("content",{}).get("parts",[])]
     result = "\n".join(parts).strip()
