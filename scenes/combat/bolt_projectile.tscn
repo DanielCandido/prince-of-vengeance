@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/bolt_projectile_2d.gd" id="1"]
+[sub_resource type="RectangleShape2D" id="Shape"]
+size = Vector2(42, 10)
+
+[node name="BoltProjectile" type="Area2D"]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape")
+[node name="Bolt" type="Polygon2D" parent="."]
+polygon = PackedVector2Array(-24, -4, 18, -4, 28, 0, 18, 4, -24, 4)
+color = Color(1, 0.48, 0.12, 1)
