@@ -53,7 +53,7 @@ func _on_enemy_health_changed(current: float, maximum: float) -> void: enemy_bar
 
 func _spawn_impact(at: Vector2, attack_type: StringName) -> void:
 	var flash := PointLight2D.new()
-	var gradient := Gradient.new(); gradient.colors = PackedColorArray(Color.WHITE, Color(1, 1, 1, 0))
+	var gradient := Gradient.new(); gradient.colors = PackedColorArray([Color.WHITE, Color(1, 1, 1, 0)])
 	var texture := GradientTexture2D.new(); texture.gradient = gradient; texture.width = 64; texture.height = 64; texture.fill = GradientTexture2D.FILL_RADIAL
 	flash.texture = texture; flash.color = Color(1.0, 0.28, 0.12) if attack_type == &"heavy" else Color(0.3, 0.75, 1.0); flash.energy = 2.5
 	add_child(flash); flash.global_position = at
@@ -76,7 +76,7 @@ func _update_telemetry_label() -> void:
 
 func _complete_playtest() -> void:
 	if _playtest_completed: return
-	_playtest_completed = true; _update_telemetry_label(); telemetry_label.text += " | CONCLUIDO"
+	_playtest_completed = true; _update_telemetry_label(); telemetry_label.text += " | CONCLUÍDO"
 	var file := FileAccess.open("user://playtest_last.json", FileAccess.WRITE)
 	if file != null: file.store_string(JSON.stringify(_build_playtest_summary(), "  "))
 
